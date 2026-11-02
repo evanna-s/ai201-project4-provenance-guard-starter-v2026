@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
 
 app = Flask(__name__)
 
@@ -184,6 +185,37 @@ def submit():
       4. Log every submission with `audit.log_decision(...)`. The content_id
          matters: `/appeal` needs it, and a student who skips it rebuilds this
          whole flow later.
+    """
+    payload = request.get_json(silent=True) or {}
+    text = payload.get("text")
+    creator_id = payload.get("creator_id")
+
+    model_score = detector.model_signal(text)
+    content_id = str(uuid.uuid4())
+   
+    guess = "unsure"
+    confidence = 0.5
+    label = "placeholder"
+
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        label=label,
+    )
+
+    return jsonify({
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "label": label,
+        "model_score": model_score,
+        "style_score": None,
+    })
+    """
+         
+    
 
     **Milestone 4 — the second signal and the score.**
       5. Add `stylometry.style_signal(text)`.
@@ -203,13 +235,13 @@ def submit():
 
     # TODO: delete this and build the route.
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": "hardcoded",
+        "guess": "unsure",
+        "confidence": 0.5,
+        "label": "placeholder",
+        "model_score": 0.5,
+        "style_score": None,
+    })
 
 
 @app.post("/appeal")

@@ -184,6 +184,7 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 ```
 
 ``` json
+curl -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{"text": "Sometimes I feel this giant weight over my shoulder, that something is pressing on my lungs. I am constantly out of breath and living on edges. That is how anxiety feels like to me.", "creator_id": "evanna"}'
 ```
 
 **An appeal**
@@ -204,6 +205,22 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ``` json
+{
+  "count": 1,
+  "entries": [
+    {
+      "combined_score": null,
+      "content_id": "f16fe853-9906-41ad-9659-6ec78688fb55",
+      "creator_id": "evanna",
+      "guess": "unsure",
+      "label": "placeholder",
+      "model_score": 0.5425,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-02T05:29:34+00:00"
+    }
+  ]
+}
 ```
 
 ------------------------------------------------------------------------
@@ -212,7 +229,7 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 1**
 
--   *What I asked for:* I asked Claude to format this file for me: adding the quotes as blocks and clean out any grammar mistake.
+-   *What I asked for:* I asked Claude to format my md files for me: adding the quotes as blocks and clean out any grammar mistake.
 -   *What came back:* Claude helped part of the formatting and gave some suggestions on my grammar.
 -   *What I changed:* I took Claude's advice and changed some places where the wording sounded unnatural.
 
