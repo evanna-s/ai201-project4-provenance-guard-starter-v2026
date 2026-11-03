@@ -125,9 +125,9 @@ Errors: 400 for missing fields, 404 if the content_id doesn't exist
      signals disagree? -->
 ```
 
-**The rule:**
+**The rule:** Average the two signals with equal weight. If either signal is below 0.5 (reads as human), cap the combined score at 0.60, which is inside the unsure band. A high-confidence AI label needs both signals to lean AI.
 
-**The numbers:**
+**The numbers:** `WEIGHT_MODEL_SIGNAL = 0.5`, `WEIGHT_STYLE_SIGNAL = 0.5`, `HUMAN_LEANING = 0.5`, `DISAGREEMENT_CAP = 0.60`, all in `config.py`. The style signal itself weights sentence length spread 0.5, word variety 0.2 and punctuation 0.3.
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -136,7 +136,18 @@ Errors: 400 for missing fields, 404 if the content_id doesn't exist
      somewhere else, say where. -->
 ```
 
-**A case where my two signals split, and what my rule does with it:**
+**A case where my two signals split, and what my rule does with it:** A test paragraph about anxiety, written by AI to probe my rule, scored 0.94 on the model signal and 0.47 on the style signal. The average is 0.70, which would be high-confidence AI. Because the style signal is below 0.5, my rule caps it at 0.60 and it is labelled unsure. Here the cap let AI text through, I would rather miss AI text than accuse a person.
+
+**Test Paragraph:** ‘Anxiety is a common problem for many people. It can affect your sleep, your work, and your relationships with the people around you. It is important to talk to someone about it. You are not alone.’
+
+**My Notes for the four testing inputs(Milestone 4)**:
+
+| Input                                | model_score | style_score | combined |
+|--------------------------------------|-------------|-------------|----------|
+| Clearly AI                           | 0.9017      | 0.8000      | 0.8508   |
+| Clearly human (my own writing)       | 0.5689      | 0.1962      | 0.3826   |
+| Formal human writing (William James) | 0.2601      | 0.7403      | 0.5002   |
+| Lightly edited AI                    | 0.8389      | 0.8124      | 0.8256   |
 
 ------------------------------------------------------------------------
 
@@ -235,9 +246,9 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 2**
 
--   *What I asked for:*
--   *What came back:*
--   *What I changed:*
+-   *What I asked for: I asked Claude to write two of the test sentences for me. To control the variables, I told Claude the theme is about anxiety.*
+-   *What came back: Claude successfully generated two sentences.*
+-   *What I changed: I modified one of them to use as "something in between".*
 
 **Moment 3**
 

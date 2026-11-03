@@ -64,8 +64,11 @@ def sentence_length_spread(text: str) -> float:
     `stdev` raises on fewer than two values. Decide what that should return
     before the attack set decides for you.
     """
-    # TODO: replace this
-    return 0.0
+    lengths = [len(words(s)) for s in sentences(text)]
+    lengths = [n for n in lengths if n]
+    if len(lengths) < 2:
+        return 0.4
+    return statistics.stdev(lengths) / statistics.mean(lengths)
 
 
 def type_token_ratio(text: str) -> float:
@@ -80,9 +83,10 @@ def type_token_ratio(text: str) -> float:
     directly comparable on it, and if your test inputs vary a lot in length,
     that alone can look like a signal.
     """
-    # TODO: replace this
-    return 0.0
-
+    sample = words(text)[:100]
+    if not sample:
+        return 0.0
+    return len(set(sample)) / len(sample)
 
 def punctuation_density(text: str) -> float:
     """
@@ -94,11 +98,19 @@ def punctuation_density(text: str) -> float:
         more interesting than full stops, because they vary more between
         writers.
     """
-    # TODO: replace this
-    return 0.0
+    total = len(words(text))
+    if not total:
+        return 0.0
+    marks = re.findall(r"[;:!?()\"'’—–-]", text)
+    return len(marks) / total * 100
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
+
+def _scale(value: float, ai_end: float, human_end: float) -> float:
+    return max(0.0, min(1.0, (value - human_end) / (ai_end - human_end)))
+
+
 
 def style_signal(text: str) -> float:
     """
@@ -122,8 +134,10 @@ def style_signal(text: str) -> float:
     you trust it. Plain and ordinary, not formal: formal prose reads as *human*
     to signal one, and it is plain writing that gets accused.
     """
-    # TODO: replace this
-    return 0.5
+    spread = _scale(sentence_length_spread(text), ai_end=0.2, human_end=0.6)
+    variety = _scale(type_token_ratio(text), ai_end=0.55, human_end=0.85)
+    punctuation = _scale(punctuation_density(text), ai_end=0.0, human_end=4.0)
+    return round(0.5 * spread + 0.2 * variety + 0.3 * punctuation, 4)
 
 
 if __name__ == "__main__":

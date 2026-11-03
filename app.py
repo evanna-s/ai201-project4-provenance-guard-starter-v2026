@@ -31,6 +31,8 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import scoring
+import stylometry
 
 app = Flask(__name__)
 
@@ -191,10 +193,11 @@ def submit():
     creator_id = payload.get("creator_id")
 
     model_score = detector.model_signal(text)
+    style_score = stylometry.style_signal(text)
+    combined_score = scoring.combine_signals(model_score, style_score)
     content_id = str(uuid.uuid4())
-   
+
     guess = "unsure"
-    confidence = 0.5
     label = "placeholder"
 
     audit.log_decision(
@@ -203,44 +206,17 @@ def submit():
         guess=guess,
         model_score=model_score,
         label=label,
+        style_score=style_score,
+        combined_score=combined_score,
     )
 
     return jsonify({
         "content_id": content_id,
         "guess": guess,
-        "confidence": confidence,
         "label": label,
         "model_score": model_score,
-        "style_score": None,
-    })
-    """
-         
-    
-
-    **Milestone 4 — the second signal and the score.**
-      5. Add `stylometry.style_signal(text)`.
-      6. Combine them with `scoring.combine_signals(...)`.
-      7. Log BOTH signal scores alongside the combined one, and put them in the
-         response too. Next unit you can't diagnose anything without them.
-
-    **Milestone 5 — the label.**
-      8. `scoring.score_to_label(...)` and put the real label in the response.
-
-    ─────────────────────────────────────────────────────────────────────────
-    Worth deciding early, because unit 8's attack set will decide it for you:
-    what should this do when `text` is missing, empty, or enormous? A crash on
-    a malformed input is one of the most common real failures there is.
-    """
-    payload = request.get_json(silent=True) or {}
-
-    # TODO: delete this and build the route.
-    return jsonify({
-        "content_id": "hardcoded",
-        "guess": "unsure",
-        "confidence": 0.5,
-        "label": "placeholder",
-        "model_score": 0.5,
-        "style_score": None,
+        "style_score": style_score,
+        "confidence": combined_score,
     })
 
 
