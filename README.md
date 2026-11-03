@@ -136,7 +136,7 @@ Errors: 400 for missing fields, 404 if the content_id doesn't exist
      somewhere else, say where. -->
 ```
 
-**A case where my two signals split, and what my rule does with it:** A test paragraph about anxiety, written by AI to probe my rule, scored 0.94 on the model signal and 0.47 on the style signal. The average is 0.70, which would be high-confidence AI. Because the style signal is below 0.5, my rule caps it at 0.60 and it is labelled unsure. Here the cap let AI text through, I would rather miss AI text than accuse a person.
+**A case where my two signals split, and what my rule does with it:** A test paragraph about anxiety, written by AI to probe my rule, scored 0.94 on the model signal and 0.47 on the style signal. The average is 0.70, which would be high-confidence AI. Because the style signal is below 0.5, my rule caps it at 0.60 and it is labelled unsure. Here, the cap let AI text through, I would rather miss AI text than accuse a person.
 
 **Test Paragraph:** ‘Anxiety is a common problem for many people. It can affect your sleep, your work, and your relationships with the people around you. It is important to talk to someone about it. You are not alone.’
 
@@ -160,15 +160,21 @@ Errors: 400 for missing fields, 404 if the content_id doesn't exist
      Write them for someone who has never heard the word "threshold". -->
 ```
 
-| Label                 | Score range | The exact text a reader sees |
-|-----------------------|-------------|------------------------------|
-| high-confidence human |             |                              |
-| unsure                |             |                              |
-| high-confidence AI    |             |                              |
+| Label | Score range | The exact text a reader sees |
+|-----------------------|--------------------|-----------------------------|
+| high-confidence human | 0.00 – 0.35 | We think this was probably written by a person. |
+| unsure | \> 0.35, \< 0.65 | We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing. |
+| high-confidence AI | 0.65 – 1.00 | This writing looks a lot like AI-generated text, but our check can be wrong, especially on plain or simple writing. If you wrote this yourself, you can ask for a person to review it. |
 
-**Why I worded the "unsure" one this way:** <!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
+After several failed attempts to get human writing labelled human (so frustrated...), I changed the human threshold from 0.35 to 0.40. None of the human pieces I tested (one of my own, plus passages by William James and Sylvia Plath) scored below 0.35. I made this change after seeing those results.
+
+```         
+python -c "import sys, detector, stylometry, scoring; t=sys.argv[1]; m=detector.model_signal(t); s=stylometry.style_signal(t); c=scoring.combine_signals(m, s); print(f'model {m}  style {s}  combined {c}  ->', scoring.score_to_label(c)[0])" "Sometimes I feel this giant weight over my shoulder, that something is pressing on my lungs. I'm constantly out of breath and living on edges. That's how anxiety feels like to me."
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+model 0.5689  style 0.1962  combined 0.3826  -> human
+```
+
+**Why I worded the "unsure" one this way:** Most people who see it wrote every word themselves, so it says plainly that it isn't an accusation and blames the check rather than the writer.
 
 ------------------------------------------------------------------------
 
@@ -181,32 +187,52 @@ Errors: 400 for missing fields, 404 if the content_id doesn't exist
 
 **A submission**
 
-```{=html}
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
-```
-
 ``` bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "Sometimes I feel this giant weight over my shoulder, that something is pressing on my lungs. I am constantly out of breath and living on edges. That is how anxiety feels like to me.", "creator_id": "evanna"}'
 ```
 
 ``` json
-curl -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{"text": "Sometimes I feel this giant weight over my shoulder, that something is pressing on my lungs. I am constantly out of breath and living on edges. That is how anxiety feels like to me.", "creator_id": "evanna"}'
+{
+  "confidence": 0.5666,
+  "content_id": "122b7a20-4b01-4b89-b615-d43672ce9e52",
+  "guess": "unsure",
+  "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.",
+  "model_score": 0.5425,
+  "style_score": 0.5908
+}
 ```
 
 **An appeal**
 
 ``` bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
-  -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+curl -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{"content_id": "122b7a20-4b01-4b89-b615-d43672ce9e52", "reasoning": "I wrote this myself for a class about anxiety."}'
 ```
 
+**Returns**
+
 ``` json
+{
+  "content_id": "122b7a20-4b01-4b89-b615-d43672ce9e52",
+  "message": "Thanks. We've recorded your appeal, and a person will review it.",
+  "status": "under_review"
+}
+```
+
+**An appeal against a content_id that doesn't exist**
+
+``` bash
+$ curl -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{"content_id": "9cfbbd8c-b025-44d0-88d4-fsdgiu34223ytr", "reasoning": "I wrote this myself for a class about anxiety."}'
+```
+
+**Returns**
+
+``` json
+{
+  "error": "not_found",
+  "message": "We couldn't find a submission with that content_id."
+}
 ```
 
 **What the log shows afterwards**
@@ -234,6 +260,41 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 }
 ```
 
+``` json
+{
+  "count": 3,
+  "entries": [
+    {
+      "content_id": "9cfbbd8c-b025-44d0-88d4-942440b4c33e",
+      "creator_id": "evanna",
+      "event": "appeal",
+      "reasoning": "I wrote this myself for a class about anxiety.",
+      "status": "under_review",
+      "timestamp": "2026-11-03T03:51:20+00:00"
+    },
+    {
+      "combined_score": 0.5666,
+      "content_id": "122b7a20-4b01-4b89-b615-d43672ce9e52",
+      "creator_id": "evanna",
+      "guess": "unsure",
+      "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.",
+      "model_score": 0.5425,
+      "status": "decided",
+      "style_score": 0.5908,
+      "timestamp": "2026-11-03T04:45:04+00:00"
+    },
+    {
+      "content_id": "122b7a20-4b01-4b89-b615-d43672ce9e52",
+      "creator_id": "evanna",
+      "event": "appeal",
+      "reasoning": "I wrote this myself for a class about anxiety.",
+      "status": "under_review",
+      "timestamp": "2026-11-03T04:47:01+00:00"
+    }
+  ]
+}
+```
+
 ------------------------------------------------------------------------
 
 ## How I Used AI
@@ -252,9 +313,9 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 3**
 
--   *What I asked for:*
--   *What came back:*
--   *What I changed:*
+-   *What I asked for:* I asked Claude to write a paragraph that could possibly split my two signals.
+-   *What came back:* Claude came up with four groups of sentences. I tested those out one by one.
+-   *What I changed:* I picked one of the sentences that creates the most divergence between my two signals.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 

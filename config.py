@@ -45,6 +45,7 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 # Longer text gives a steadier reading but takes longer. 400 tokens is roughly
 # 300 words, which is enough for the signal to mean something.
 DETECTOR_MAX_TOKENS = 400
+MAX_TEXT_CHARS = 20000
 
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
@@ -73,7 +74,7 @@ DISAGREEMENT_CAP = 0.60
 # getting through. There is no setting that avoids the trade — only settings
 # that decide who pays for it.
 
-HUMAN_THRESHOLD = 0.35
+HUMAN_THRESHOLD = 0.40
 AI_THRESHOLD = 0.65
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can

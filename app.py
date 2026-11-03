@@ -152,6 +152,10 @@ def health():
 
 
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
+def reject(creator_id, reason, status_code, message):
+    """Refuse a request, and leave a trace of it in the audit log."""
+    audit.log_rejection(creator_id=creator_id, reason=reason)
+    return jsonify({"error": reason, "message": message}), status_code
 
 @app.post("/submit")
 # @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
@@ -188,17 +192,35 @@ def submit():
          matters: `/appeal` needs it, and a student who skips it rebuilds this
          whole flow later.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return reject("unknown", "invalid_json", 400,
+                      "Send a JSON object with text and creator_id.")
+
     text = payload.get("text")
     creator_id = payload.get("creator_id")
 
-    model_score = detector.model_signal(text)
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return reject("unknown", "missing_creator_id", 400,
+                      "creator_id is required.")
+    if not isinstance(text, str) or not text.strip():
+        return reject(creator_id, "missing_text", 400,
+                      "text is required and can't be empty.")
+    if len(text) > config.MAX_TEXT_CHARS:
+        return reject(creator_id, "text_too_long", 413,
+                      f"text can't be longer than {config.MAX_TEXT_CHARS} characters.")
+
+    try:
+        model_score = detector.model_signal(text)
+    except ValueError:
+        return reject(creator_id, "text_too_short", 422,
+                      "text is too short to score. Send a few sentences at least.")
     style_score = stylometry.style_signal(text)
     combined_score = scoring.combine_signals(model_score, style_score)
     content_id = str(uuid.uuid4())
 
-    guess = "unsure"
-    label = "placeholder"
+    guess, label = scoring.score_to_label(combined_score)
+
 
     audit.log_decision(
         content_id=content_id,
@@ -240,14 +262,37 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
 
-    # TODO: delete this and build the route.
+    if not isinstance(content_id, str) or not content_id.strip() \
+            or not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({
+            "error": "missing_fields",
+            "message": "content_id and reasoning are both required.",
+        }), 400
+
+    entries = audit.entries_for(content_id)
+    if not entries:
+        return jsonify({
+            "error": "not_found",
+            "message": "We couldn't find a submission with that content_id.",
+        }), 404
+
+    audit.log_appeal(
+        content_id=content_id,
+        creator_id=entries[0].get("creator_id"),
+        reasoning=reasoning,
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Thanks. We've recorded your appeal, and a person will review it.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
