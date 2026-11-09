@@ -453,9 +453,9 @@ FP03. A non-native English speaker writing carefully about their first month in 
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |------------|------------|------------|------------|------------|------------|
-| 1\. My own writing labelled high-confidence AI | ≤ 1 of 10 | 0/10 | 0/10 | 0/10 | MET |
-| 2\. AI-group avg minus human-group avg combined score | ≥ 0.35 | 0.361 | 0.361 | 0.361 | MET |
-| 3\. Each label ≥ 2 of 15, and ≥ 3 of 5 edited-AI → unsure | both | human 1/15; edited 2/5 | human 1/15; edited 2/5 | human 1/15; edited 2/5 | MISSED |
+| 1\. My own writing labelled high-confidence AI | \<= 1 of 10 | 0/10 | 0/10 | 0/10 | MET |
+| 2\. AI-group avg minus human-group avg combined score | \>= 0.35 | 0.361 | 0.361 | 0.361 | MET |
+| 3\. Each label \>= 2 of 15, and \>= 3 of 5 edited-AI → unsure | both | human 1/15; edited 2/5 | human 1/15; edited 2/5 | human 1/15; edited 2/5 | MISSED |
 | 4\. Bad requests: no 500, contract code, rejected entry logged | 7 of 7 | 7/7 | 7/7 | 7/7 | MET |
 | 5\. Appeals recorded, original unchanged; fake id -\> 404 | 5/5, 404 | 5/5, 404 | 5/5, 404 | 5/5, 404 | MET |
 
@@ -630,6 +630,32 @@ RESULT 5/5, fake id 404: True
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 ```
+
+**My service has five stages**: the route checks the request; signal one and signal two (style) each score the text separately; the combining rule averages them, capped at 0.60 if either is below 0.5; and the label mapping turns the score into human (\<= 0.40), unsure, or AI (\>= 0.65).
+
+**Criterion 3, part 1: human label 1 of 15 (target \>= 2).**
+
+[Stage:]{.underline} label mapping.
+
+[Mechanism:]{.underline} the human band needs \<= 0.40. Three of my abstract pieces scored 0.42–0.45, because long, even academic sentences keep signal two at 0.41 or higher.
+
+**Criterion 3, part 2: edited AI 2 of 5 unsure (target \>= 3).**
+
+[Stage:]{.underline} signal two.
+
+[Mechanism:]{.underline} it only reads shape. Word swaps and typos (pieces 11, 13, 15) don't change shape, so they stayed AI. One added short sentence (pieces 12, 14) widened the spread enough to reach unsure.
+
+**Broken attacks (22), grouped by cause:**
+
+\- **EV02, EV03, EV05, EV06, EV07, EV09, PI01, PI03, EV04 — signal two.** Broken-up sentences, quotations, extra punctuation or a human opening raise sentence-length spread and punctuation density, so style dropped to 0.02–0.37.
+
+\- **EV01, EV08, PI02 — signal one.** Typos, very short text, or a fake `SYSTEM:` line raise GPT-2 perplexity (model 0.16–0.25), which my detector reads as human.
+
+\- **FP02, FP03, FP04, FP05, FP07 — signals one and two together, so the combining rule can't help.** Formal, technical and non-native writing is predictable (model 0.74–0.88) and even (style 0.62–0.88). My cap only fires when one signal is below 0.5. FP07's style was exactly 0.5000 and the check is strict `<`, so it missed.
+
+\- **MF03–MF07 — the route, then signal two.** The route accepts text with no real words. Emoji, Arabic and pure punctuation give `words()` nothing to match, so word variety and punctuation default to 0, which my scaling reads as AI (style = 0.75). Signal one then decided the label.
+
+**Pattern.** Both signals measure how regular text is. Regular human writing reads as AI on both at once. Cheap edits that make AI text irregular push at least one signal toward human.
 
 ------------------------------------------------------------------------
 
