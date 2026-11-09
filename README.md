@@ -452,16 +452,165 @@ FP03. A non-native English speaker writing carefully about their first month in 
 <!-- Your five criteria across three trials. `run_eval.py --label before`. -->
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-|-----------|--------|-------|-------|-------|---------|
-| 1\.       |        |       |       |       |         |
-| 2\.       |        |       |       |       |         |
-| 3\.       |        |       |       |       |         |
-| 4\.       |        |       |       |       |         |
-| 5\.       |        |       |       |       |         |
+|------------|------------|------------|------------|------------|------------|
+| 1\. My own writing labelled high-confidence AI | ≤ 1 of 10 | 0/10 | 0/10 | 0/10 | MET |
+| 2\. AI-group avg minus human-group avg combined score | ≥ 0.35 | 0.361 | 0.361 | 0.361 | MET |
+| 3\. Each label ≥ 2 of 15, and ≥ 3 of 5 edited-AI → unsure | both | human 1/15; edited 2/5 | human 1/15; edited 2/5 | human 1/15; edited 2/5 | MISSED |
+| 4\. Bad requests: no 500, contract code, rejected entry logged | 7 of 7 | 7/7 | 7/7 | 7/7 | MET |
+| 5\. Appeals recorded, original unchanged; fake id -\> 404 | 5/5, 404 | 5/5, 404 | 5/5, 404 | 5/5, 404 | MET |
+
+**How I decided each verdict:**
+
+1\. **MET, but on an easier test than the criterion describes.** One-sentence text never reaches the AI band in my system, so this target was easy to meet with these inputs. **This is the criterion I would tighten:** ten pieces of at least four sentences each.
+
+2\. **MET by 0.011.** 0.8207 − 0.4594 = 0.3613 against a target of 0.35. Part of the gap may be length rather than authorship, and one of the five "clearly human" pieces (my own abstract) was labelled AI. The criterion measures the average gap, not individual mistakes, so by its own terms it is met.
+
+3\. **MISSED.** The human label appeared once in 15 inputs, and 2 of the 5 lightly edited AI pieces were labelled unsure.
+
+4\. **MET.** All seven bad bodies returned 400, 422 or 413, never 500, in every trial, and the log holds three `rejected` entries for each `eval_bad_*` creator.
+
+5\. **MET.** Three complete runs, 5/5 each, and the fake content_id returned 404 with no appeal entry written.
 
 **Real output from one trial**, pasted as text, naming the file and function that produced it:
 
 ``` json
+### c1 own writing
+
+**Trial 1**
+
+{
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.5577,
+    "model_score": 0.8655,
+    "style_score": 0.25,
+    "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.",
+    "sent": "I'm trying to learn chess, but I don't think I'm smart enough."
+  }
+---
+### c2 spread
+
+**Trial 1**
+{
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.7355,
+    "model_score": 0.821,
+    "style_score": 0.65,
+    "label": "This writing looks a lot like AI-generated text, but our check can be wrong, especially on plain or simple writing. If you wrote this yourself, you can ask for a person to review it.",
+    "sent": "Time management is an essential skill for students and professionals a"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.6908,
+    "model_score": 0.573,
+    "style_score": 0.8086,
+    "label": "This writing looks a lot like AI-generated text, but our check can be wrong, especially on plain or simple writing. If you wrote this yourself, you can ask for a person to review it.",
+    "sent": "Green development is one of the important agendas for China's current "
+  },
+---
+### c3 coverage
+
+**Trial 1**
+{
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.792,
+    "model_score": 0.784,
+    "style_score": 0.8,
+    "label": "This writing looks a lot like AI-generated text, but our check can be wrong, especially on plain or simple writing. If you wrote this yourself, you can ask for a person to review it.",
+    "sent": "Learning a new language can open a lot of doors, both personally and p"
+  },
+{
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.6,
+    "model_score": 0.8056,
+    "style_score": 0.4928,
+    "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.",
+    "sent": "Sleep is super important for overall health and well-being. During sle"
+  },
+---
+### c4 bad input
+
+**Trial 1**
+
+[
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"creator_id\": \"eval_bad_missing\"}"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "(empty text)"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "   \n\t "
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"text\": null, \"creator_id\": \"eval_bad_null\"}"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"text\": 12345, \"creator_id\": \"eval_bad_number\"}"
+  },
+  {
+    "status": 422,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "Hi"
+  },
+  {
+    "status": 413,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "word word word word word word word word word word word word word word "
+  }
+]
+---
+Criterion 5 — appeals — run by hand with an inline Python script, because run_eval.py can't submit and then appeal the content_id it got back. 
+Output of trial 1:
+0 200 ['decided', 'under_review'] PASS
+1 200 ['decided', 'under_review'] PASS
+2 200 ['decided', 'under_review'] PASS
+3 200 ['decided', 'under_review'] PASS
+4 200 ['decided', 'under_review'] PASS
+fake id -> 404 | appeal entries for fake id: 0
+RESULT 5/5, fake id 404: True
 ```
 
 **Diagnoses**
