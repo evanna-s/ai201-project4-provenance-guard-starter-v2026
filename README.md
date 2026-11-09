@@ -323,22 +323,46 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ## Rate Limiting
 
-**My limits:** \_\_\_ per minute, \_\_\_ per day
+**My limits:** \_\_5\_ per minute, \_50\_\_ per day
 
-**Why those numbers and not others:** <!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+**Why those numbers and not others:**
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+In my opinion, a real writer submit their own work a few times an hour, then they also have a burst of three or four while revising one piece and checking in again. Five minute leaves room for that burst, and 50 a day is the cap that normally no writer would hit. I lowered the threshold then the starters 10 per minute 200 per day because every submission runs the language model so each one costs real compute. I also set the limits low because someone could send many small variations of the same text to find out exactly where my 0.40 and 0.65 cut off sir and then use that to get AI text past the detector.
+
+**What a caller counts as:**
+
+Per `creator_id`, falling back to the IP address when a request has no usable `creator_id`. This is the weakness: `creator_id` is whatever the caller types, so one script that invents a new `creator_id` per request is never limited at all. Per-address limiting would catch that script but would also lump together everyone behind one school or library network.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```         
+15 submissions as 'flood_tester' against http://127.0.0.1:5000
+The first one is slow while the model loads.
+
+  [ 1/15] 200
+  [ 2/15] 200
+  [ 3/15] 200
+  [ 4/15] 200
+  [ 5/15] 200
+  [ 6/15] 429
+  [ 7/15] 429
+  [ 8/15] 429
+  [ 9/15] 429
+  [10/15] 429
+  [11/15] 429
+  [12/15] 429
+  [13/15] 429
+  [14/15] 429
+  [15/15] 429
+
+============================================================
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
+============================================================
+
+10 of 15 were rate limited. Paste the run above into your README
+under **Rate Limiting**, and check GET /log recorded the rejections.
 ```
 
 ------------------------------------------------------------------------
