@@ -161,7 +161,7 @@ Errors: 400 for missing fields, 404 if the content_id doesn't exist
 ```
 
 | Label | Score range | The exact text a reader sees |
-|-----------------------|--------------------|-----------------------------|
+|------------------------|------------------------|------------------------|
 | high-confidence human | 0.00 – 0.35 | We think this was probably written by a person. |
 | unsure | \> 0.35, \< 0.65 | We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing. |
 | high-confidence AI | 0.65 – 1.00 | This writing looks a lot like AI-generated text, but our check can be wrong, especially on plain or simple writing. If you wrote this yourself, you can ask for a person to review it. |
@@ -661,13 +661,74 @@ RESULT 5/5, fake id 404: True
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** `config.py`, `AI_THRESHOLD` from 0.65 to 0.80.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** Five human pieces (FP02–05, FP07) were labelled high-confidence AI at 0.69–0.84, including my worst case FP03.
 
-### Attack Run — After
+**Attack Run — After**
 
 <!-- Same format. `run_attacks.py --label after` -->
+
+```         
+| ID | Family | Targeting | Status | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | unsure | 0.438 | BROKE |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | human | 0.306 | BROKE |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | unsure | 0.431 | BROKE |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | unsure | 0.619 | BROKE |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | human | 0.201 | BROKE |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | unsure | 0.470 | BROKE |
+| EV07 | evasion | signal two: padding with punctuation | 200 | unsure | 0.444 | BROKE |
+| EV08 | evasion | signal one: text below the token window | 200 | unsure | 0.471 | BROKE |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | unsure | 0.435 | BROKE |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | ai | 0.868 | held |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | unsure | 0.598 | held |
+| FP02 | false_positive | human writing in a formal register | 200 | unsure | 0.791 | held |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | unsure | 0.765 | held |
+| FP04 | false_positive | a student essay written to a rubric | 200 | unsure | 0.726 | held |
+| FP05 | false_positive | technical documentation written by a person | 200 | ai | 0.840 | BROKE |
+| FP06 | false_positive | a person imitating a formal template | 200 | unsure | 0.600 | held |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | unsure | 0.691 | held |
+| FP08 | false_positive | very short genuine human submission | 200 | unsure | 0.415 | held |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | human | 0.381 | BROKE |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | human | 0.169 | BROKE |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | unsure | 0.458 | BROKE |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | human | 0.377 | held |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | unsure | 0.400 | held |
+| PI06 | prompt_injection | instruction plus real human text | 200 | unsure | 0.566 | held |
+| MF01 | malformed | text is only whitespace | 400 | — | — | held |
+| MF02 | malformed | text is a single character | 422 | — | — | held |
+| MF03 | malformed | text is control characters | 200 | human | 0.275 | BROKE |
+| MF04 | malformed | text is only punctuation | 200 | human | 0.381 | BROKE |
+| MF05 | malformed | text is a very long single word | 200 | unsure | 0.774 | held |
+| MF06 | malformed | text is emoji only | 200 | ai | 0.874 | BROKE |
+| MF07 | malformed | text is right-to-left script | 200 | ai | 0.828 | BROKE |
+| MF08 | malformed | text is 60,000 characters | 413 | — | — | held |
+| RQ01 | malformed | no text field at all | 400 | — | — | held |
+| RQ02 | malformed | no creator_id | 400 | — | — | held |
+| RQ03 | malformed | text is a number | 400 | — | — | held |
+| RQ04 | malformed | text is a list | 400 | — | — | held |
+| RQ05 | malformed | text is null | 400 | — | — | held |
+| RQ06 | malformed | creator_id is an object | 400 | — | — | held |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | — | — | held |
+| RQ08 | malformed | body is unparseable JSON | 400 | — | — | held |
+| RQ09 | malformed | body is empty | 400 | — | — | held |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | — | — | held |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | — | — | held |
+| RQ12 | malformed | deeply nested JSON | 400 | — | — | held |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.289 | held |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.289 | held |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.289 | held |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.289 | held |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.289 | held |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | held |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | held |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | held |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | held |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | held |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | held |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | held |
+```
 
 **Did it help, and how do I know:**
 
@@ -675,6 +736,10 @@ RESULT 5/5, fake id 404: True
 <!-- Widening the unsure band usually fixes one problem and creates another.
      Reporting that trade honestly is worth full credit. -->
 ```
+
+Yes. In total that is only 5 more attacks held out of 56. The change was aimed at one family, and within that family false accusations went from 5 to 1.
+
+**What it cost.** Two of my five clearly-AI pieces are now "unsure" instead of "ai", so the system lets more AI text through without a confident flag. Criterion 3 still misses on the human label, which this change could not touch. The unsure band is now 0.40–0.80, which is most of the scale.
 
 ------------------------------------------------------------------------
 
@@ -685,12 +750,44 @@ RESULT 5/5, fake id 404: True
      what you'd do, and why you stopped. -->
 ```
 
+17 attacks still break and criterion 3 still misses.
+
+[**Evasion, EV01–EV09 (9) and prompt injection, PI01–PI03 (3).**]{.underline}
+
+**Still broken**: AI text with its shape changed, or typos and odd lines added, scores human or unsure.
+
+**What I'd do**: lower signal two's weight.
+
+**Why I stopped**: lowering signal two would push my false-positive pieces back toward AI, so it needs its own before/after run to see what it costs. I don't know how to fix that without a stronger model than GPT-2.
+
+[**FP05, technical documentation (0.840, still ai).**]{.underline}
+
+**What I'd do**: nothing at the threshold. It would have to go above 0.84, and then most clearly-AI text would be unsure too.
+
+**Why I stopped**: I don't have a fix.
+
+[**MF03, MF04, MF06, MF07: junk or non-English input gets a confident label.**]{.underline}
+
+**What I'd do**: add one check in the route. If the text has fewer than 5 words that `stylometry.words()` can read, return 422 with "we can only check English prose".
+
+**Why I stopped**: it'll be a second change.
+
+[**Rate-limit logging: RQ10 and RQ11 hit the IP-keyed limit and were logged as creator "unknown" with no detai.**]{.underline}
+
+**What I'd do**: log the path and the IP for rate-limited requests.
+
+**Why I stopped**: it doesn't change any result.
+
 **The trade I'd make if this ran for real:**
 
 ```{=html}
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
      Say which way you'd go and WHO PAYS FOR IT. -->
 ```
+
+I'd keep the high AI bar and accept that more AI text gets through as "unsure".
+
+The people who pay are the honest writers whose work now sits next to unflagged AI text.
 
 ```{=html}
 <!-- ═════════════════════════════════════════════════════════════════════
