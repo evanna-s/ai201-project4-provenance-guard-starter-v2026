@@ -192,15 +192,27 @@ def submit():
                       f"text can't be longer than {config.MAX_TEXT_CHARS} characters.",
                       **trace())
 
+    stage = "model_signal"
     try:
         model_score = detector.model_signal(text)
-    except ValueError:
-        return reject(creator_id, "text_too_short", 422,
-                      "text is too short to score. Send a few sentences at least.",
-                      **trace())
-    style_score = stylometry.style_signal(text)
-    combined_score = scoring.combine_signals(model_score, style_score)
-    guess, label = scoring.score_to_label(combined_score)
+        stage = "style_signal"
+        style_score = stylometry.style_signal(text)
+        stage = "combine"
+        combined_score = scoring.combine_signals(model_score, style_score)
+        guess, label = scoring.score_to_label(combined_score)
+    except Exception as exc:  # noqa: BLE001 — any failure here must answer AND leave a trace
+        if stage == "model_signal" and isinstance(exc, ValueError):
+            return reject(creator_id, "text_too_short", 422,
+                          "text is too short to score. Send a few sentences at least.",
+                          **trace())
+        return reject(
+            creator_id, "scoring_failed", 503,
+            "We couldn't check this right now, so nothing has been decided "
+            "about your text. Please try again in a minute.",
+            **trace(stage=stage, error_type=type(exc).__name__, error=str(exc)[:300]),
+        )
+
+    
     content_id = str(uuid.uuid4())
 
     audit.log_decision(
