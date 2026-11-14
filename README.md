@@ -827,3 +827,29 @@ The people who pay are the honest writers whose work now sits next to unflagged 
 ------------------------------------------------------------------------
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+
+------------------------------------------
+
+## Capstone
+
+**What This Extends**
+
+**Provenance Guard (Project 4)**: a Flask service that scores a piece of text with two signals (gpt2 perplexity and a stylometry score), turns them into a label, logs the decision, and accepts appeals.
+
+**What's new this unit:** `/submit` no longer crashes when the scoring stage fails. If the detector or the style signal raises, the service answers with a JSON 503 and a reason, and writes a record to the audit log. Every record also carries `duration_ms`, so slow runs are visible after the fact.
+
+**The Shape**
+
+**Shape B** — harden against failure. Input validation already existed: bad JSON, missing fields, text that's too long or too short, and rate limits all return a 4xx and leave a log entry. What wasn't handled was the inside of the pipeline. `app.py` only catches `ValueError` from `detector.model_signal`. I'm catching those failures, returning a JSON 503 that tells the writer to try again, and logging a rejection with the reason.
+
+**Out of scope:**
+
+\- I'm not adding timeouts or retries around the model call.
+
+\- I'm not changing the signals, the weights, or the thresholds.
+
+\- I'm not adding logging to `/appeal`, and I'm not hosting the service.
+
+**Running It**
+
+Path B — local with logs. The start command, Python version, pinned dependencies, and model size are in [RUNNING.md](RUNNING.md).
