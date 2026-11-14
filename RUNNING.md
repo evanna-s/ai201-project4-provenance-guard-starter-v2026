@@ -306,3 +306,18 @@ is evidence, and the entries you paste into your README are what unit 8 grades.
 
 **Do not delete and recreate this repository.** You submit the same URL both
 units.
+
+
+## Triggering the failure path (capstone)
+
+Start the service with a model name that doesn't exist:
+
+```bash
+AI201_DETECTOR_MODEL=no-such-model python app.py
+```
+
+Any `/submit` then returns a JSON 503 with `"error": "scoring_failed"`, and `GET /log?limit=1` 
+shows a `rejected` entry with `stage`, `error_type` and `duration_ms`. Restart with plain `python app.py` 
+to go back to normal.
+
+
