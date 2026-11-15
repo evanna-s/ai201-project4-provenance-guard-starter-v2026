@@ -17,7 +17,7 @@ Under each, write a sentence or two on **why that target**. *"I allow at most 1 
 **Cover at least three of these five areas.** They're prompts, not a form.
 
 | Area | A question it could answer |
-|----|----|
+|------------------------------------|------------------------------------|
 | False positives | How often may a human's writing get called AI? |
 | Score spread | How far apart should clearly-AI and clearly-human text score? |
 | Label coverage | Is every one of your three labels actually reachable? |
@@ -145,3 +145,7 @@ With the detector working, send 10 requests within one minute: first 4 bad input
 With the detector working, 10 of 10 warm submissions show `duration_ms` under 200: 5 short texts (100–300 characters) and 5 long texts (2,000–5,000 characters, each made by joining consecutive rows of the `text` column in `attack_set/attacks.csv` until it passes 2,000 characters). Cold starts are excluded, and requests are spaced at least 13 s apart to stay under the rate limit.
 
 **Why this target:** This checks that the extension didn't slow the existing system down. The measured warm mean is 40.6 ms, but only on 128-character texts. 200 ms is about 5× that, leaving room for long texts, which give the model up to 400 tokens and the style signal far more text to read. A looser target like 5 s would pass even if the model reloaded every time, so it wouldn't catch anything.
+
+**Revised:** 5 long texts of 2,000–6,000 characters (instead of 2,000–5,000).
+
+**Why:** Joining consecutive rows as described, the fifth text (rows 20–29) comes to 5,855 characters, because row 29 alone is 4,000 characters. As written, the criterion couldn't be run.
