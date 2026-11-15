@@ -17,7 +17,7 @@ Under each, write a sentence or two on **why that target**. *"I allow at most 1 
 **Cover at least three of these five areas.** They're prompts, not a form.
 
 | Area | A question it could answer |
-|------------------------------------|------------------------------------|
+|----|----|
 | False positives | How often may a human's writing get called AI? |
 | Score spread | How far apart should clearly-AI and clearly-human text score? |
 | Label coverage | Is every one of your three labels actually reachable? |
@@ -47,8 +47,7 @@ I included plain pieces because signal one rewards predictable writing, so plain
 
 Across 5 clearly AI pieces and 5 clearly human pieces, the average combined score of the AI group is at least 0.35 higher than the average of the human group, in every one of three trials.
 
-**Why this target:** 
-If the two groups sit closer than that, the labels are separating noise. 
+**Why this target:** If the two groups sit closer than that, the labels are separating noise.
 
 ------------------------------------------------------------------------
 
@@ -56,9 +55,7 @@ If the two groups sit closer than that, the labels are separating noise.
 
 <!-- Your criterion. -->
 
-Across 15 inputs (5 clearly AI, 5 clearly human, 5 lightly edited AI), each of the three labels appears at least twice, and at least 3 of the 5 lightly edited pieces are labelled unsure, in every one of three trials. 
-**Why this target:** 
-A label that appears only once could be a fluke, and an unsure label that is never used on hard cases is not doing its job. Since the model has real limitations, the unsure label protects writers from being judged on a guess the system cannot back up.
+Across 15 inputs (5 clearly AI, 5 clearly human, 5 lightly edited AI), each of the three labels appears at least twice, and at least 3 of the 5 lightly edited pieces are labelled unsure, in every one of three trials. **Why this target:** A label that appears only once could be a fluke, and an unsure label that is never used on hard cases is not doing its job. Since the model has real limitations, the unsure label protects writers from being judged on a guess the system cannot back up.
 
 ------------------------------------------------------------------------
 
@@ -68,8 +65,7 @@ A label that appears only once could be a fluke, and an unsure label that is nev
 
 Across 7 bad requests (missing text, empty text, whitespace only, text set to null, text set to a number, text under 3 tokens, and text over 20,000 characters), none returns a 500. Each returns the 400, 413 or 422 from my endpoint contract, and each writes a rejected entry to the audit log.
 
-**Why this target:** 
-Everything should leave a trace so that problems can be diagnosed and fixed later. The 20,000-character limit fits a long essay or chapter, and the detector reads only the first 400 tokens or so anyway.
+**Why this target:** Everything should leave a trace so that problems can be diagnosed and fixed later. The 20,000-character limit fits a long essay or chapter, and the detector reads only the first 400 tokens or so anyway.
 
 ------------------------------------------------------------------------
 
@@ -79,12 +75,9 @@ Everything should leave a trace so that problems can be diagnosed and fixed late
 
 Across 5 appeals against real content_ids, all 5 return 200 with status under_review, and for each one GET /log shows the original decision unchanged followed by one appeal entry containing the writer's reasoning. An appeal with a content_id that does not exist returns 404 and adds no appeal entry.
 
-**Why this target:** 
-The appeal is the only thing between a wrong accusation and nothing at all, so a single lost appeal is a failure.
+**Why this target:** The appeal is the only thing between a wrong accusation and nothing at all, so a single lost appeal is a failure.
 
-
-(I have no idea why this file looks so weird in the visual mode of RStudio...)
-------------------------------------------------------------------------
+## (I have no idea why this file looks so weird in the visual mode of RStudio...)
 
 ```{=html}
 <!-- ─────────────────────────────────────────────────────────────────────────
@@ -118,3 +111,37 @@ The appeal is the only thing between a wrong accusation and nothing at all, so a
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
 ```
+
+## Capstone criteria
+
+A **trial** is one fresh start of the service followed by the requests a criterion names. Each criterion is run in three trials. "Detector unavailable" means the service was started with `AI201_DETECTOR_MODEL=no-such-model`. "Warm" means any request after the first successful one since the service started. Measured baseline before writing these: a warm submission takes 40.6 ms on average (10 runs, max 65.1 ms), and the first request after start takes about 5.3 s while the model loads.
+
+### C1. A scoring failure answers in JSON, not with a crash page
+
+With the detector unavailable, 5 of 5 submissions of normal text (over 100 characters, so it isn't refused as too short) return HTTP 503 with a JSON body whose `error` is `scoring_failed` and whose `message` is not empty. None returns a 500 or an HTML page.
+
+**Why this target:** The person submitting has no way to tell an HTML 500 from "your writing was flagged." 4 of 5 would mean one writer in five still gets the crash page.
+
+### C2. Every failed submission leaves exactly one record that names the stage
+
+For the same 5 failing submissions, `GET /log` shows exactly 5 new entries with `reason: scoring_failed`, each with `stage: model_signal` and `error_type: DetectorUnavailable`. No decision entries are written for them.
+
+**Why this target:** More than one record per request would inflate failure counts. The stage has to be named correctly, or the record can't point me to the part of the system that broke.
+
+### C3. A failure answers in under a second
+
+Among the 5 failing submissions in a trial, the 4 after the first each show `duration_ms` under 1,000 in their log entry. The first is excluded because it pays for importing torch and transformers.
+
+**Why this target:** A failure computes nothing, so one that takes longer than a second is doing hidden work on every request. During an outage, that work would be repeated for every writer who tries. One second is also roughly where a person starts to notice a wait.
+
+### C4. Every /submit request, of any outcome, is logged with its duration
+
+With the detector working, send 10 requests within one minute: first 4 bad inputs (invalid JSON, missing text, text under 3 tokens, text over 20,000 characters), each with its own `creator_id`; then 6 normal texts under one shared `creator_id`, so the first 5 are scored and the 6th comes back 429 from the rate limit (5 per minute per `creator_id`). 10 of 10 requests produce exactly one new log entry with a numeric `duration_ms`.
+
+**Why this target:** Duration is the field I need to diagnose anything slow after the fact. A record type that lacks it is a blind spot exactly where it would matter.
+
+### C5. Warm submissions still finish in under 200 ms, including long texts
+
+With the detector working, 10 of 10 warm submissions show `duration_ms` under 200: 5 short texts (100–300 characters) and 5 long texts (2,000–5,000 characters, each made by joining consecutive rows of the `text` column in `attack_set/attacks.csv` until it passes 2,000 characters). Cold starts are excluded, and requests are spaced at least 13 s apart to stay under the rate limit.
+
+**Why this target:** This checks that the extension didn't slow the existing system down. The measured warm mean is 40.6 ms, but only on 128-character texts. 200 ms is about 5× that, leaving room for long texts, which give the model up to 400 tokens and the style signal far more text to read. A looser target like 5 s would pass even if the model reloaded every time, so it wouldn't catch anything.
