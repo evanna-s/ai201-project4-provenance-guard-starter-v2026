@@ -895,3 +895,43 @@ Method: I started the service with `python app.py`, sent one warmup request, the
 |---------------------------------------|---------------------------------|
 | Warm request, mean of 10               | **40.6 ms** (min 36.3, max 65.1) |
 | First request after start (model load) | 5,282.8 ms                       |
+
+**Run Log and Verdicts**
+
+Three trials, each on a fresh start of the service: the failure half (C1–C3) with `AI201_DETECTOR_MODEL=no-such-model`, the normal half (C4–C5) with plain `python app.py`. Creator IDs `t1_*`, `t2_*`, `t3_*` in `logs/audit.jsonl`, starting 2026-11-15 21:13 UTC. Raw output is in `results/capstone_run_before.md`.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|------------|------------|------------|------------|------------|------------|
+| C1. Scoring failure answers in JSON 503 | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| C2. One record per failure, naming the stage | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| C3. Failures 2–5 answer in under 1,000 ms | 4 of 4 | 4/4 | 4/4 | 4/4 | MET |
+| C4. Every /submit request logged with duration_ms | 10 of 10 | 9/10 | 9/10 | 9/10 | MISSED |
+| C5. Warm submissions under 200 ms, incl. long texts | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
+
+C1–C3 (`app.py::submit`, the `except Exception` around the scoring stages; records written by `audit.log_rejection`), run 3:
+
+```         
+503 application/json
+{"error": "scoring_failed", "message": "We couldn't check this right now, so nothing has been decided about your text. Please try again in a minute."}
+
+{"timestamp": "2026-11-15T21:32:48+00:00", "creator_id": "t3_fail_1", "event": "rejected", "status": "rejected", "reason": "scoring_failed", "duration_ms": 1930.3, "text_chars": 114, "stage": "model_signal", "error_type": "DetectorUnavailable"}
+{"timestamp": "2026-11-15T21:32:48+00:00", "creator_id": "t3_fail_2", "event": "rejected", "status": "rejected", "reason": "scoring_failed", "duration_ms": 91.1, "text_chars": 114, "stage": "model_signal", "error_type": "DetectorUnavailable"}
+{"timestamp": "2026-11-15T21:32:48+00:00", "creator_id": "t3_fail_3", "event": "rejected", "status": "rejected", "reason": "scoring_failed", "duration_ms": 102.3, "text_chars": 114, "stage": "model_signal", "error_type": "DetectorUnavailable"}
+{"timestamp": "2026-11-15T21:32:48+00:00", "creator_id": "t3_fail_4", "event": "rejected", "status": "rejected", "reason": "scoring_failed", "duration_ms": 93.8, "text_chars": 114, "stage": "model_signal", "error_type": "DetectorUnavailable"}
+{"timestamp": "2026-11-15T21:32:48+00:00", "creator_id": "t3_fail_5", "event": "rejected", "status": "rejected", "reason": "scoring_failed", "duration_ms": 56.1, "text_chars": 114, "stage": "model_signal", "error_type": "DetectorUnavailable"}
+```
+
+C4 (`app.py::rate_limited`, the 429 handler), run 3. Nine entries carry `duration_ms`; this one doesn't:
+
+```         
+{"creator_id": "t3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute", "timestamp": "2026-11-15T21:35:54+00:00"}
+```
+
+**Diagnosis of C4.** The stage is the rate limiter. The mechanism: Flask-Limiter checks the limit before the route function runs. When a request is over the limit it raises a 429, which goes straight to the `rate_limited` error handler, so `submit()` never runs. My timer (`start = time.perf_counter()` and `trace()`) lives inside `submit()`, so a rate-limited request has no start time to measure from. The other rejections (400, 413, 422) all carry `duration_ms` because they happen inside `submit()`. So the gap is any request turned away before it reaches the route.
+
+C5 (`app.py::submit`, written by `audit.log_decision`), run 3, one short and one long text:
+
+```         
+{"timestamp": "2026-11-15T21:33:33+00:00", "creator_id": "t3_short_1", "guess": "unsure", "model_score": 0.4858, "style_score": 0.7636, "combined_score": 0.6, "status": "decided", "duration_ms": 34.7, "text_chars": 114}
+{"timestamp": "2026-11-15T21:35:31+00:00", "creator_id": "t3_long_5", "guess": "human", "model_score": 0.6146, "style_score": 0.1568, "combined_score": 0.3857, "status": "decided", "duration_ms": 161.2, "text_chars": 5855}
+```
