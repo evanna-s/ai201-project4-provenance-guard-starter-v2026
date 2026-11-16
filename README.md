@@ -828,7 +828,7 @@ The people who pay are the honest writers whose work now sits next to unflagged 
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
 
-------------------------------------------
+------------------------------------------------------------------------
 
 ## Capstone
 
@@ -853,3 +853,45 @@ The people who pay are the honest writers whose work now sits next to unflagged 
 **Running It**
 
 Path B — local with logs. The start command, Python version, pinned dependencies, and model size are in [RUNNING.md](RUNNING.md).
+
+**Instrumentation**
+
+Every request to `/submit` writes one JSON line to `logs/audit.jsonl` (written by `audit.py`, called from `app.py::submit`). Fields:
+
+-   `timestamp`: UTC, ISO 8601
+-   `creator_id`: who sent it
+-   `text_chars`: length of the text that came in (null if there was no text)
+-   `content_id`, `guess`, `model_score`, `style_score`, `combined_score`, `label`: what came out, for decisions
+-   `status`: `decided` or `rejected`
+-   `duration_ms`: wall time from the start of the handler to the log write
+-   On rejections: `reason` (`invalid_json`, `missing_text`, `text_too_short`, `text_too_long`, `scoring_failed`, ...)
+-   On `scoring_failed` only: `stage` (`model_signal` / `style_signal` / `combine`), `error_type`, `error` (first 300 chars)
+
+Thirteen entries from real sessions on 2026-11-14/15: two cold-start requests (`step2_ok`, `warmup`), one failed run with the detector unavailable (`step2_fail`), and ten warm runs (`cost_run_1`–`cost_run_10`):
+
+```         
+{"timestamp": "2026-11-14T02:55:08+00:00", "content_id": "db72d29e-10c6-4434-a078-b262653bb959", "creator_id": "step2_ok", "guess": "unsure", "model_score": 0.8013, "style_score": 0.6426, "combined_score": 0.7219, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 3411.5, "text_chars": 167}
+{"timestamp": "2026-11-14T02:57:38+00:00", "creator_id": "step2_fail", "event": "rejected", "status": "rejected", "reason": "scoring_failed", "duration_ms": 1896.5, "text_chars": 167, "stage": "model_signal", "error_type": "DetectorUnavailable", "error": "Couldn't load 'no-such-model': no-such-model is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'\nIf this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<y"}
+{"timestamp": "2026-11-15T19:40:23+00:00", "content_id": "909e562c-556b-4722-9563-37c3080d4d48", "creator_id": "warmup", "guess": "unsure", "model_score": 0.4858, "style_score": 0.7636, "combined_score": 0.6, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 5282.8, "text_chars": 114}
+{"timestamp": "2026-11-15T19:40:27+00:00", "content_id": "e49a9b3a-5392-41a1-8a57-e6f37159886d", "creator_id": "cost_run_1", "guess": "unsure", "model_score": 0.3372, "style_score": 0.568, "combined_score": 0.4526, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 36.8, "text_chars": 128}
+{"timestamp": "2026-11-15T19:40:40+00:00", "content_id": "174023c6-c1fe-45a9-a847-2d45b460f437", "creator_id": "cost_run_2", "guess": "unsure", "model_score": 0.3322, "style_score": 0.568, "combined_score": 0.4501, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 39.9, "text_chars": 128}
+{"timestamp": "2026-11-15T19:40:53+00:00", "content_id": "801dd1ff-33ff-4639-858b-bad3159db916", "creator_id": "cost_run_3", "guess": "unsure", "model_score": 0.3241, "style_score": 0.568, "combined_score": 0.446, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 36.8, "text_chars": 128}
+{"timestamp": "2026-11-15T19:41:06+00:00", "content_id": "4b1bd0f7-9ba9-4024-81b6-5e0612c9df46", "creator_id": "cost_run_4", "guess": "unsure", "model_score": 0.3211, "style_score": 0.568, "combined_score": 0.4446, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 36.3, "text_chars": 128}
+{"timestamp": "2026-11-15T19:41:19+00:00", "content_id": "5f494c1b-aff5-4bcb-bc77-eedfa401436a", "creator_id": "cost_run_5", "guess": "unsure", "model_score": 0.3216, "style_score": 0.568, "combined_score": 0.4448, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 36.3, "text_chars": 128}
+{"timestamp": "2026-11-15T19:41:33+00:00", "content_id": "399f6a55-d3d6-458b-bd11-7bc01c33087b", "creator_id": "cost_run_6", "guess": "unsure", "model_score": 0.3228, "style_score": 0.568, "combined_score": 0.4454, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 65.1, "text_chars": 128}
+{"timestamp": "2026-11-15T19:41:46+00:00", "content_id": "1cb516d7-8512-41bf-9170-b1bdf7d1b6d9", "creator_id": "cost_run_7", "guess": "unsure", "model_score": 0.3143, "style_score": 0.568, "combined_score": 0.4411, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 43.6, "text_chars": 128}
+{"timestamp": "2026-11-15T19:41:59+00:00", "content_id": "9e6dd672-5e04-4874-a2e7-30d615283b28", "creator_id": "cost_run_8", "guess": "unsure", "model_score": 0.3208, "style_score": 0.568, "combined_score": 0.4444, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 37.8, "text_chars": 128}
+{"timestamp": "2026-11-15T19:42:12+00:00", "content_id": "bf2eb0fd-393a-4d81-b223-629c9d221ace", "creator_id": "cost_run_9", "guess": "unsure", "model_score": 0.3219, "style_score": 0.568, "combined_score": 0.4449, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 36.6, "text_chars": 128}
+{"timestamp": "2026-11-15T19:42:25+00:00", "content_id": "0ba5bb21-bd70-4b72-a636-cad054b7c53a", "creator_id": "cost_run_10", "guess": "unsure", "model_score": 0.3326, "style_score": 0.568, "combined_score": 0.4503, "label": "We couldn't tell whether this was written by a person or by AI. This is not a finding against you. Our check is often unsure, especially on short or very formal writing.", "status": "decided", "duration_ms": 36.7, "text_chars": 129}
+```
+
+**What It Costs**
+
+Provenance Guard calls no hosted API. Both signals run locally, so the real cost is compute time.
+
+Method: I started the service with `python app.py`, sent one warmup request, then 10 identical-length requests (128 chars) 13 s apart, to stay under the 5-per-minute rate limit. I averaged `duration_ms` from those 10 log entries.
+
+| What                                   | Measured                         |
+|---------------------------------------|---------------------------------|
+| Warm request, mean of 10               | **40.6 ms** (min 36.3, max 65.1) |
+| First request after start (model load) | 5,282.8 ms                       |
