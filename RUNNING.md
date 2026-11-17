@@ -68,16 +68,26 @@ sent it data, it sent something back.
 `/ping` still answers: if it does, the problem is in your handler; if it
 doesn't, it's the service itself, and that's a help-channel question.
 
-Then try the route you're going to build:
+Then submit a piece of writing:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "some writing", "creator_id": "me"}'
+  -d '{"creator_id": "me", "text": "This is a normal paragraph with several sentences. It should be long enough to score. Nothing about it is unusual."}'
 ```
 
-It returns a `501` saying it isn't built yet. **That's the correct starting
-position.**
+You get back JSON with `content_id`, `guess`, `label`, `confidence`,
+`model_score` and `style_score`, and `GET /log?limit=1` shows the same decision
+with its `duration_ms`. The first submission after starting takes longer (about
+7 s in a clean checkout) because the model loads into memory; later ones take a
+few seconds.
+
+Text under about 3 tokens gets a `422`, missing or empty fields a `400`, text
+over 20,000 characters a `413`, and more than 5 submissions a minute from one
+`creator_id` a `429`. Every one of those leaves a `rejected` entry in the log.
+
+> Tested from a clean checkout: `git clone` into a new folder, then the steps
+> above, in order.
 
 ---
 
@@ -88,8 +98,8 @@ position.**
 | `POST /ping` | **works** | The example. Don't edit it |
 | `GET /health` | **works** | Is the service up, is the model loaded |
 | `GET /log` | **works** | The audit log, as JSON |
-| `POST /submit` | **you build it** | Milestones 3, 4, 5 |
-| `POST /appeal` | **you build it** | Milestone 5 |
+| `POST /submit` | **works** | Scores a text with both signals, labels it, logs it. Returns a JSON 503 if scoring fails |
+| `POST /appeal` | **works** | Records an appeal against a `content_id`; the item moves to `under_review` |
 
 ---
 
@@ -239,10 +249,10 @@ your write-up; that's the deliverable.
 | File | What it does |
 |---|---|
 | `config.py` | Every setting: thresholds, weights, rate limits, the model |
-| `app.py` | The service. `/ping` and `/log` work; `/submit` and `/appeal` are yours |
-| `detector.py` | Signal one — the local model. Given to you |
-| `stylometry.py` | Signal two. **Stubs — you build these** |
-| `scoring.py` | Combining and labelling. **Stubs — you build these** |
+| `app.py` | The service: `/ping`, `/health`, `/log`, `/submit`, `/appeal` |
+| `detector.py` | Signal one — the local model (gpt2) |
+| `stylometry.py` | Signal two — style measures |
+| `scoring.py` | Combining the two signals and turning the score into a label |
 | `audit.py` | The audit log writer. Given to you |
 | `run_attacks.py` | Runs the attack set — **unit 8** |
 | `run_eval.py` | Runs your criteria three times — **unit 8** |
@@ -279,7 +289,7 @@ sentences, a pasted quotation. That is very cheap to do on purpose.
 
 | What you see | What it means |
 |---|---|
-| `501 not_implemented` | Correct at the start — that's the TODO in `app.py` |
+| `503 scoring_failed` | The scoring stage raised. `GET /log?limit=1` names the `stage` and `error_type`. Usually the model isn't downloaded or `AI201_DETECTOR_MODEL` is set to a name that doesn't exist |
 | `404` from curl | Is the server running? Is the path exactly what you typed? |
 | `Cannot bind parameter 'Headers'` | You're in PowerShell, where `curl` is a different tool. Use `curl.exe`, on one line |
 | Request body arrives empty | curl needs `-H "Content-Type: application/json"` |
@@ -308,7 +318,7 @@ is evidence, and the entries you paste into your README are what unit 8 grades.
 units.
 
 
-## Triggering the failure path (capstone)
+## Triggering the failure path (Capstone)
 
 Start the service with a model name that doesn't exist:
 
