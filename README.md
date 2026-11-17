@@ -844,11 +844,9 @@ The people who pay are the honest writers whose work now sits next to unflagged 
 
 **Out of scope:**
 
-\- I'm not adding timeouts or retries around the model call.
-
-\- I'm not changing the signals, the weights, or the thresholds.
-
-\- I'm not adding logging to `/appeal`, and I'm not hosting the service.
+-   I'm not adding timeouts or retries around the model call.
+-   I'm not changing the signals, the weights, or the thresholds.
+-   I'm not adding logging to `/appeal`, and I'm not hosting the service.
 
 **Running It**
 
@@ -863,7 +861,7 @@ Every request to `/submit` writes one JSON line to `logs/audit.jsonl` (written b
 -   `text_chars`: length of the text that came in (null if there was no text)
 -   `content_id`, `guess`, `model_score`, `style_score`, `combined_score`, `label`: what came out, for decisions
 -   `status`: `decided` or `rejected`
--   `duration_ms`: wall time from the start of the handler to the log write
+-   `duration_ms`: wall time from the start of the handler to the log write (for rate-limited requests, from the `before_request` hook, since the handler never runs)
 -   On rejections: `reason` (`invalid_json`, `missing_text`, `text_too_short`, `text_too_long`, `scoring_failed`, ...)
 -   On `scoring_failed` only: `stage` (`model_signal` / `style_signal` / `combine`), `error_type`, `error` (first 300 chars)
 
@@ -896,6 +894,10 @@ Method: I started the service with `python app.py`, sent one warmup request, the
 | Warm request, mean of 10               | **40.6 ms** (min 36.3, max 65.1) |
 | First request after start (model load) | 5,282.8 ms                       |
 
+**A hundred people a day:** Provenance Guard calls no paid API, so the money cost is \$0 per request (100 × \$0 = \$0), and the compute is 100 requests × 40.6 ms = 4,060 ms, about 4 seconds of local CPU a day, plus one 5.3 s model load each time the service starts.
+
+Long texts cost more: at my slowest measured run (194.2 ms), 100 × 194.2 ms = 19.4 s a day, still negligible.
+
 **Run Log and Verdicts**
 
 Three trials, each on a fresh start of the service: the failure half (C1–C3) with `AI201_DETECTOR_MODEL=no-such-model`, the normal half (C4–C5) with plain `python app.py`. Creator IDs `t1_*`, `t2_*`, `t3_*` in `logs/audit.jsonl`, starting 2026-11-15 21:13 UTC. Raw output is in `results/capstone_run_before.md`.
@@ -903,12 +905,12 @@ Three trials, each on a fresh start of the service: the failure half (C1–C3) w
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |------------|------------|------------|------------|------------|------------|
 | C1. Scoring failure answers in JSON 503 | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
-| C2. One record per failure, naming the stage | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| C2. One log record per failure, naming the stage | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
 | C3. Failures 2–5 answer in under 1,000 ms | 4 of 4 | 4/4 | 4/4 | 4/4 | MET |
-| C4. Every /submit request logged with duration_ms | 10 of 10 | 9/10 | 9/10 | 9/10 | MISSED |
-| C5. Warm submissions under 200 ms, incl. long texts | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
+| C4. Every /submit request logged with `duration_ms` | 10 of 10 | 9/10 | 9/10 | 9/10 | MISSED |
+| C5. Warm submissions under 200 ms | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
 
-C1–C3 (`app.py::submit`, the `except Exception` around the scoring stages; records written by `audit.log_rejection`), run 3:
+C1–C3 (`app.py::submit`, the `except Exception` around the scoring stages; records written by `audit.log_rejection`), run 3. Records shown without the `error` field; the full lines are in `logs/audit.jsonl`:
 
 ```         
 503 application/json
@@ -924,7 +926,7 @@ C1–C3 (`app.py::submit`, the `except Exception` around the scoring stages; rec
 C4 (`app.py::rate_limited`, the 429 handler), run 3. Nine entries carry `duration_ms`; this one doesn't:
 
 ```         
-{"creator_id": "t3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute", "timestamp": "2026-11-15T21:35:54+00:00"}
+{"timestamp": "2026-11-15T21:35:54+00:00", "creator_id": "t3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 ```
 
 **Diagnosis of C4.** The stage is the rate limiter. The mechanism: Flask-Limiter checks the limit before the route function runs. When a request is over the limit it raises a 429, which goes straight to the `rate_limited` error handler, so `submit()` never runs. My timer (`start = time.perf_counter()` and `trace()`) lives inside `submit()`, so a rate-limited request has no start time to measure from. The other rejections (400, 413, 422) all carry `duration_ms` because they happen inside `submit()`. So the gap is any request turned away before it reaches the route.
@@ -957,11 +959,11 @@ C5 (`app.py::submit`, written by `audit.log_decision`), run 3, one short and one
 **The C4 record that was missing before** (run 3, `app.py::rate_limited`):
 
 ```         
-    before: {"timestamp": "2026-11-15T21:35:54+00:00", "creator_id": "t3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
-    after:  {"timestamp": "2026-11-16T21:07:49+00:00", "creator_id": "a3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute", "duration_ms": 0.2, "text_chars": 114}
+before: {"timestamp": "2026-11-15T21:35:54+00:00", "creator_id": "t3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+after:  {"timestamp": "2026-11-16T21:07:49+00:00", "creator_id": "a3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute", "duration_ms": 0.2, "text_chars": 114}
 ```
 
-**Did it help?** Yes. The rate-limited request is now timed, at 0.2 ms each time, which also shows the limiter turns a request away before any scoring runs. The other four criteria didn't move:
+**Did it help?** Yes. C4 went from 9/10 to 10/10 in all three runs. The rate-limited request is now timed, at 0.2 ms each time, which also shows the limiter turns a request away before any scoring runs. The other four criteria didn't move:
 
 | Measure                         | Before         | After          |
 |---------------------------------|----------------|----------------|
@@ -974,3 +976,33 @@ C5 (`app.py::submit`, written by `audit.log_decision`), run 3, one short and one
 
 -   **A discarded after-fix trial.** My first after-fix trial (2026-11-16 17:32 UTC, creator IDs `t1_*`, still in `logs/audit.jsonl`) ran with the laptop on battery. C4 was already 10/10 there, but all five long texts took 227–277 ms, so C5 came out 5/10. Short texts were unchanged (34–36 ms), so only the compute-heavy part slowed down.
 -   **Order in run a1.** In `a1` I ran C4 before C5 by mistake, so the model's cold load fell on C4's requests: the "too short" rejection took 2,840 ms and the first normal one 839 ms. C4 has no time target, so it doesn't change the verdict. C5 ran right after on a warm model. Runs `a2` and `a3` used the usual order.
+
+**What's Still Broken**
+
+After the fix, all five criteria are met in all three runs, so nothing is still missed. But one target was set too low.
+
+**C3: failures 2–5 answer in under 1,000 ms.**
+
+**Why it's too low**: failures 2–5 actually took 53.5–104.5 ms across all six runs, so a 1,000 ms target could hardly fail. It wouldn't catch a real slowdown.
+
+**What I'd tighten it to**: 4 of 4 under 250 ms. That still leaves room for the Hugging Face lookup each failing request makes.
+
+**What I'd do next with another unit:**
+
+I'd make the detector remember a failed model load for about 60 seconds and return the 503 straight away, instead of asking Hugging Face again on every request.
+
+That one first, because right now a failure (\~90 ms) is slower than a warm success (\~30 ms), so during a real outage every writer waits longer and the service keeps hitting an outside server.
+
+**How I Used AI**
+
+**Moment 1**
+
+-   *What I asked for:* I asked Claude to review my five criteria.
+-   *What came back:* Claude pointed out some of the criteria could be hard to follow given the lack of instructions.
+-   *What I changed:* I rewrote one of the criteria and cross checked it again with Claude.
+
+**Moment 2**
+
+-   *What I asked for:* I asked Claude to fix the format of my run logs and paste it beautifully into this file.
+-   *What came back:* a run log with some parts missing.
+-   *What I changed:* I pasted it into this file myself and then asked Claude to do an overall refine of the formatting.
