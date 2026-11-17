@@ -27,7 +27,7 @@ Routes:
 import uuid
 import time
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 
 import audit
 import config
@@ -36,6 +36,12 @@ import scoring
 import stylometry
 
 app = Flask(__name__)
+
+
+@app.before_request
+def start_timer():
+    """Stamp the start time before anything else runs, including the rate limiter."""
+    g.request_start = time.perf_counter()
 
 
 # ── Rate limiting — UNIT 8 ────────────────────────────────────────────────────
@@ -107,10 +113,14 @@ if config.RATE_LIMITING_ENABLED:
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             payload = {}
+        start = g.get("request_start")
+        text = payload.get("text")
         audit.log_rejection(
             creator_id=payload.get("creator_id", "unknown"),
             reason="rate_limited",
             limit=str(exc.description),
+            duration_ms=round((time.perf_counter() - start) * 1000, 1) if start is not None else None,
+            text_chars=len(text) if isinstance(text, str) else None,
         )
         return jsonify({
             "error": "rate_limited",
