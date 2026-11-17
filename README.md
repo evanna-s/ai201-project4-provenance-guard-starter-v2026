@@ -935,3 +935,42 @@ C5 (`app.py::submit`, written by `audit.log_decision`), run 3, one short and one
 {"timestamp": "2026-11-15T21:33:33+00:00", "creator_id": "t3_short_1", "guess": "unsure", "model_score": 0.4858, "style_score": 0.7636, "combined_score": 0.6, "status": "decided", "duration_ms": 34.7, "text_chars": 114}
 {"timestamp": "2026-11-15T21:35:31+00:00", "creator_id": "t3_long_5", "guess": "human", "model_score": 0.6146, "style_score": 0.1568, "combined_score": 0.3857, "status": "decided", "duration_ms": 161.2, "text_chars": 5855}
 ```
+
+**Pattern.** C4 failed the same way in all three runs, on the one request the rate limiter turned away, and on nothing else. Every request that reached `submit()` was timed.
+
+**Targets I set too low.** C3 is the loose one. I set it at under 1,000 ms, but failures 2–5 actually took 53.5–102.3 ms, so the target couldn't really fail. I'd tighten it to **4 of 4 under 250 ms**.
+
+**The Improvement**
+
+**What I changed:** In `app.py` I added a `@app.before_request` hook (`start_timer`) that records `g.request_start` before Flask-Limiter checks the limit. The 429 handler (`rate_limited`) now uses that time to log `duration_ms` and `text_chars` like every other rejection.
+
+**Re-run:** three trials with the same commands, same texts and same order (failure half on `no-such-model`, then the normal half with C5 before C4). Creator IDs are `a1_*`, `a2_*`, `a3_*` in `logs/audit.jsonl`, from 2026-11-16 20:40 UTC. Raw output: `results/capstone_run_after.md`.
+
+| Criterion | Target | Before: Run 1 | Run 2 | Run 3 | Verdict | After: Run 1 | Run 2 | Run 3 | Verdict |
+|--------|--------|--------|--------|--------|--------|--------|--------|--------|--------|
+| C1. Scoring failure answers in JSON 503 | 5 of 5 | 5/5 | 5/5 | 5/5 | MET | 5/5 | 5/5 | 5/5 | MET |
+| C2. One log record per failure, naming the stage | 5 of 5 | 5/5 | 5/5 | 5/5 | MET | 5/5 | 5/5 | 5/5 | MET |
+| C3. Failures 2–5 answer in under 1,000 ms | 4 of 4 | 4/4 | 4/4 | 4/4 | MET | 4/4 | 4/4 | 4/4 | MET |
+| C4. Every /submit request logged with `duration_ms` | 10 of 10 | 9/10 | 9/10 | 9/10 | MISSED | 10/10 | 10/10 | 10/10 | **MET** |
+| C5. Warm submissions under 200 ms | 10 of 10 | 10/10 | 10/10 | 10/10 | MET | 10/10 | 10/10 | 10/10 | MET |
+
+**The C4 record that was missing before** (run 3, `app.py::rate_limited`):
+
+```         
+    before: {"timestamp": "2026-11-15T21:35:54+00:00", "creator_id": "t3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+    after:  {"timestamp": "2026-11-16T21:07:49+00:00", "creator_id": "a3_c4", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute", "duration_ms": 0.2, "text_chars": 114}
+```
+
+**Did it help?** Yes. The rate-limited request is now timed, at 0.2 ms each time, which also shows the limiter turns a request away before any scoring runs. The other four criteria didn't move:
+
+| Measure                         | Before         | After          |
+|---------------------------------|----------------|----------------|
+| C3: failures 2–5                | 53.5–102.3 ms  | 53.5–104.5 ms  |
+| C3: first failure (not counted) | 1,920–1,930 ms | 1,902–2,024 ms |
+| C5: short texts                 | 27.1–65.9 ms   | 28.2–39.6 ms   |
+| C5: long texts                  | 147.2–194.2 ms | 148.8–180.5 ms |
+
+**Two things to disclose about the re-run:**
+
+-   **A discarded after-fix trial.** My first after-fix trial (2026-11-16 17:32 UTC, creator IDs `t1_*`, still in `logs/audit.jsonl`) ran with the laptop on battery. C4 was already 10/10 there, but all five long texts took 227–277 ms, so C5 came out 5/10. Short texts were unchanged (34–36 ms), so only the compute-heavy part slowed down.
+-   **Order in run a1.** In `a1` I ran C4 before C5 by mistake, so the model's cold load fell on C4's requests: the "too short" rejection took 2,840 ms and the first normal one 839 ms. C4 has no time target, so it doesn't change the verdict. C5 ran right after on a warm model. Runs `a2` and `a3` used the usual order.
